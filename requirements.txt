@@ -2,7 +2,7 @@
 # has the tightest constraints. Part 4's own list (pydantic>=2, fastapi,
 # unpinned) is compatible with these pins, so no conflict — just standardizing
 # on one exact set for a reproducible build across Kunal's/Aditya's machines.
-
+uvicorn
 inferedge-moss==1.0.0b8
 inferedge-moss-core==0.4.1
 pydantic==2.13.5
