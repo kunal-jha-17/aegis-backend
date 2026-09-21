@@ -582,6 +582,38 @@ async def api_replay(body: ReplayRequest):
         raise _http(e)
 
 
+def _demo_reset_sync() -> Dict[str, Any]:
+    """Clears reviews (this file's own table) and precedents (Part 2's table,
+    but same shared ./data/aegis.db file — a full reset needs both cleared or
+    a stale approved precedent from an earlier run silently short-circuits a
+    later run's FLAG->approve step, exactly like the ALLOW-instead-of-FLAG
+    result seen when re-running test_demo.py against a warm local server).
+    audit_log is intentionally left alone: its triggers make it append-only
+    by design, and that's the point of it — it should survive a demo reset."""
+    _ensure_schema_sync()
+    with closing(_connect()) as conn:
+        with conn:
+            reviews_deleted = conn.execute("DELETE FROM reviews").rowcount
+            try:
+                precedents_deleted = conn.execute("DELETE FROM precedents").rowcount
+            except sqlite3.OperationalError:
+                # part2_evidence hasn't created its table yet on this run — nothing to clear
+                precedents_deleted = 0
+    return {"reset": True, "reviews_deleted": reviews_deleted, "precedents_deleted": precedents_deleted,
+            "note": "audit_log is append-only by design and was not cleared"}
+
+
+@router.post("/v1/demo/reset")
+async def api_demo_reset():
+    """Wipe pending/resolved reviews and all precedents between demo runs or
+    rehearsals, so a FLAG->approve scenario doesn't skip straight to ALLOW
+    because an earlier run's approval is still sitting in the shared DB."""
+    try:
+        return await asyncio.to_thread(_demo_reset_sync)
+    except Exception as e:
+        raise _http(AegisError("DEMO_RESET_FAILED", repr(e)))
+
+
 @router.get("/v1/decisions/{request_id}")
 async def api_get_decision(request_id: str, include_shadow: bool = Query(False)):
     try:
